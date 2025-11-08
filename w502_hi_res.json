@@ -1,0 +1,9 @@
+[
+  {
+    "filename": "w502.pdf",
+    "strategy": "hi_res",
+    "success": false,
+    "error": "'list' object has no attribute 'get'",
+    "elapsed_minutes": 105.32
+  }
+]

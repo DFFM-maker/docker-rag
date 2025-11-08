@@ -20,19 +20,13 @@ services:
     build:
       context: .
       dockerfile: unstructured.Dockerfile
-    image: local/unstructured-api-gunicorn-custom:latest
+      args:
+        UNSTRUCTURED_API_REF: main # sostituisci con un commit SHA per stabilità
+    image: local/unstructured-api-gpu:latest
     container_name: unstructured
     restart: unless-stopped
     ports:
       - "8000:8000"
     volumes:
-      - ./data:/documenti # Mappa i tuoi PDF
-
-    # --- Assegna la GPU NVIDIA ---
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
+      - ./data:/documenti
+    gpus: all

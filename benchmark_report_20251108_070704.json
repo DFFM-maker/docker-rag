@@ -1,0 +1,22 @@
+[
+  {
+    "filename": "test1.pdf",
+    "filepath": "D:\\docker-rag\\data\\test1.pdf",
+    "size_mb": 0.413,
+    "pages": null,
+    "strategy": "hi_res",
+    "processing_time_seconds": 75.656,
+    "processing_time_minutes": 1.261,
+    "processing_time_hours": 0.02102,
+    "elements_count": 274,
+    "speed_mb_per_second": 0.00546,
+    "speed_mb_per_minute": 0.32744,
+    "speed_mb_per_hour": 19.64631,
+    "pages_per_minute": null,
+    "pages_per_hour": null,
+    "success": true,
+    "timestamp_start": "2025-11-08T07:05:46.705780",
+    "timestamp_end": "2025-11-08T07:07:02.363629",
+    "status_code": 200
+  }
+]

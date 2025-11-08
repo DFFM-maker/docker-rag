@@ -1,75 +1,57 @@
 FROM nvidia/cuda:11.8.0-cudnn8-runtime-ubuntu22.04
 
-# Evita prompt interattivi durante l'installazione
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
 
-# Installa dipendenze di sistema necessarie (incluso Tesseract)
+# Dipendenze di sistema + PPA per Python 3.12
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3.10 \
-    python3-pip \
-    python3-dev \
+    software-properties-common \
+    curl wget git \
     poppler-utils \
-    tesseract-ocr \
-    tesseract-ocr-ita \
-    tesseract-ocr-eng \
-    libtesseract-dev \
-    libmagic1 \
-    libgl1-mesa-glx \
-    libglib2.0-0 \
-    curl \
-    wget \
-    && rm -rf /var/lib/apt/lists/*
+    tesseract-ocr tesseract-ocr-ita tesseract-ocr-eng libtesseract-dev \
+    libmagic1 libgl1-mesa-glx libglib2.0-0 \
+ && add-apt-repository ppa:deadsnakes/ppa \
+ && apt-get update && apt-get install -y --no-install-recommends \
+    python3.12 python3.12-dev python3.12-venv \
+ && rm -rf /var/lib/apt/lists/*
 
-# Crea utente non-root
+# Utente non-root
 RUN useradd -m -u 1000 notebook-user
-
-# Imposta directory di lavoro
-WORKDIR /home/notebook-user
-
-# Installa pacchetti Python come utente
 USER notebook-user
-
-# Aggiorna pip
-RUN python3 -m pip install --no-cache-dir --user --upgrade pip setuptools wheel
-
-
-# Installa unstructured con TUTTI gli optional: docs, GPU e API
-RUN python3 -m pip install --no-cache-dir --user \
-    "unstructured[all-docs,api,gpu]" \
-    "gunicorn==21.2.0" \
-    "uvicorn[standard]==0.24.0" \
-    "pdf2image==1.16.3" \
-    "python-multipart==0.0.6"
-
-# Configura PATH per i binari dell'utente
-ENV PATH=/home/notebook-user/.local/bin:${PATH}
-ENV PYTHONPATH=/home/notebook-user
-
-# Crea directory per l'applicazione
-RUN mkdir -p /home/notebook-user/app
-
-# Copia il file dell'applicazione (verrà creato nel volume)
 WORKDIR /home/notebook-user
 
-# Esponi la porta
+# Crea e attiva virtualenv Python 3.12
+RUN python3.12 -m venv /home/notebook-user/venv
+ENV PATH=/home/notebook-user/venv/bin:${PATH}
+ENV VIRTUAL_ENV=/home/notebook-user/venv
+
+# Aggiorna pip nel venv
+RUN python -m pip install --upgrade pip setuptools wheel
+
+# Clona il repo dell'API (non si pip-insta il repo; si installano i requirements)
+ARG UNSTRUCTURED_API_REF=main
+RUN git clone --depth 1 --branch ${UNSTRUCTURED_API_REF} https://github.com/Unstructured-IO/unstructured-api.git unstructured-api
+
+WORKDIR /home/notebook-user/unstructured-api
+
+# Installa i requirements lockati (compatibili con Python 3.12)
+RUN python -m pip install --no-cache-dir -r requirements/base.txt
+
+# (Se torch non vede CUDA, puoi forzare la wheel cu118)
+# RUN python -m pip install --no-cache-dir --upgrade torch --index-url https://download.pytorch.org/whl/cu118
+
+# PYTHONPATH per importare i moduli dal repo (prepline_general, scripts, ecc.)
+ENV PYTHONPATH=/home/notebook-user/unstructured-api:${PYTHONPATH}
+
+# Variabili utili
+ENV UNSTRUCTURED_API_LOCAL_FILE_DIR=/documenti
+ENV UNSTRUCTURED_API_LOG_LEVEL=info
+
 EXPOSE 8000
 
 # Healthcheck
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD curl -f http://localhost:8000/healthcheck || exit 1
+HEALTHCHECK --interval=30s --timeout=10s --start-period=50s --retries=3 \
+  CMD curl -f http://localhost:8000/healthcheck || exit 1
 
-# Entrypoint e comando per Gunicorn (con il nome corretto)
-ENTRYPOINT ["gunicorn"]
-CMD ["unstructured_api.app:app", \
-     "-k", "uvicorn.workers.UvicornWorker", \
-     "--bind", "0.0.0.0:8000", \
-     "--workers", "6", \
-     "--timeout", "1800", \
-     "--graceful-timeout", "30", \
-     "--keep-alive", "5", \
-     "--max-requests", "200", \
-     "--max-requests-jitter", "50", \
-     "--log-level", "info", \
-     "--access-logfile", "-", \
-     "--error-logfile", "-"]
+# Avvio tramite lo script del repo (gestisce uvicorn/gunicorn e init dei modelli)
+ENTRYPOINT ["bash", "scripts/app-start.sh"]
